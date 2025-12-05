@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobile Quiz Maker (Fixed)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Hind:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* --- 1. CSS VARIABLES --- */
+        :root {
+            --bg-gradient: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            --badge-text: #b21f1f; 
+            --highlight-color: #d35400; 
+            --opt-bg: #fdbb2d;
+            --poster-text: #fff;
+        }
+
+        /* --- 2. MOBILE LAYOUT (NO SCROLL) --- */
+        body { 
+            margin: 0; background: #f4f4f4; font-family: 'Poppins', sans-serif; 
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden; 
+        }
+
+        /* --- 3. PREVIEW AREA (Top Sticky) --- */
+        .preview-container {
+            flex: 0 0 auto;
+            width: 100%;
+            background: #222;
+            padding: 10px 0;
+            display: flex; justify-content: center; align-items: center;
+            border-bottom: 3px solid #b71c1c;
+            z-index: 10;
+        }
+
+        /* यह बॉक्स स्क्रीन के हिसाब से खुद को सेट करेगा (16:9 Ratio) */
+        .ratio-wrapper {
+            width: 95%; /* मोबाइल में थोड़ा मार्जिन */
+            max-width: 600px;
+            aspect-ratio: 16/9;
+            position: relative;
+            background: #000;
+            overflow: hidden; /* बाहर निकलने वाली चीज़ें छिप जाएंगी */
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        /* असली पोस्टर (HD Size) - इसे हम JS से छोटा करेंगे */
+        #poster {
+            width: 1280px; height: 720px;
+            position: absolute; top: 0; left: 0;
+            transform-origin: top left; /* कोने से छोटा होगा */
+            background: var(--bg-gradient);
+            color: var(--poster-text);
+            display: flex; flex-direction: column; padding: 40px; box-sizing: border-box;
+        }
+
+        /* --- 4. EDITOR PANEL (Bottom Scrollable) --- */
+        .editor-panel {
+            flex: 1; 
+            padding: 15px; 
+            overflow-y: auto; 
+            background: #fff;
+            padding-bottom: 80px; /* नीचे जगह ताकि बटन न छिपे */
+        }
+
+        /* --- CONTROLS --- */
+        .control-panel {
+            background: #e3f2fd; padding: 10px; border-radius: 8px; margin-bottom: 15px;
+            border: 1px solid #90caf9; text-align: center;
+        }
+        .control-row { display: flex; gap: 8px; margin-bottom: 8px; }
+        .btn {
+            flex: 1; padding: 10px; border: none; border-radius: 6px; color: white;
+            font-weight: bold; font-size: 14px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; gap: 5px;
+        }
+        .btn-prev { background: #546e7a; } .btn-next { background: #0288d1; }
+        .btn-magic { background: linear-gradient(45deg, #d500f9, #651fff); width: 100%; margin-bottom: 5px;}
+        .btn-import { background: #4527a0; width: 100%; font-size: 12px; padding: 8px;}
+
+        /* --- INPUTS --- */
+        label { font-size: 12px; font-weight: bold; color: #555; display: block; margin-top: 8px; }
+        input, select {
+            width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px;
+            font-size: 16px; background: #fafafa; margin-bottom: 5px; box-sizing: border-box;
+        }
+        .row-inputs { display: flex; gap: 10px; }
+        .col { flex: 1; }
+        
+        .highlight-input { border-color: #ffcdd2 !important; background: #ffebee !important; color: #c62828; }
+
+        /* --- POSTER STYLING --- */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .badge { background: #fff; color: var(--badge-text); padding: 10px 35px; border-radius: 50px; font-weight: bold; font-size: 32px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        .channel-name { font-size: 36px; font-weight: bold; text-transform: uppercase; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+
+        .question-box {
+            background: rgba(255,255,255,0.95); padding: 20px; border-radius: 25px;
+            flex-grow: 1; margin-bottom: 30px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .question-content { font-size: 48px; color: #222; font-weight: 700; text-align: center; line-height: 1.3; }
+        .q-prefix { color: var(--highlight-color); margin-right: 15px; font-weight: 800; }
+        .highlight { color: var(--highlight-color); text-decoration: underline; }
+
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 20px; }
+        .option {
+            background: rgba(0,0,0,0.6); border: 3px solid rgba(255,255,255,0.4);
+            padding: 18px; border-radius: 18px; color: white; font-size: 32px; font-weight: 600;
+            display: flex; align-items: center;
+        }
+        .opt-label {
+            width: 60px; height: 60px; background: var(--opt-bg); color: #222;
+            display: flex; justify-content: center; align-items: center; border-radius: 50%;
+            margin-right: 20px; font-weight: bold; font-size: 28px; flex-shrink: 0;
+        }
+        .footer {
+            margin-top: auto; display: flex; justify-content: center; align-items: center; gap: 20px;
+            background: rgba(255,255,255,0.3); padding: 12px 40px; border-radius: 50px; align-self: center;
+        }
+        .social-text { font-size: 26px; font-weight: 600; }
+        
+        /* Correct Answer */
+        .correct-style { background: #2e7d32 !important; border-color: #fff !important; transform: scale(1.02); }
+        .correct-style .opt-label { background: #fff; color: #2e7d32; }
+
+        /* Import Box */
+        #import-area { display: none; padding: 10px; background: #eee; border-radius: 8px; margin-top: 10px; }
+        #json-input { width: 100%; height: 60px; font-size: 12px; }
+
+    </style>
+</head>
+<body>
+
+    <div class="preview-container">
+        <div class="ratio-wrapper" id="ratioWrapper">
+            <div id="poster">
+                <div class="header">
+                    <div class="badge">GK QUIZ</div>
+                    <div class="channel-name" id="out-channel">CHANNEL</div>
+                </div>
+                <div class="question-box">
+                    <div class="question-content">
+                        <span class="q-prefix" id="out-qno">Q.1</span>
+                        <span id="out-question-text">Loading...</span>
+                    </div>
+                </div>
+                <div class="options-grid">
+                    <div class="option" id="opt-a"><span class="opt-label">A</span> <span id="out-a">Option A</span></div>
+                    <div class="option" id="opt-b"><span class="opt-label">B</span> <span id="out-b">Option B</span></div>
+                    <div class="option" id="opt-c"><span class="opt-label">C</span> <span id="out-c">Option C</span></div>
+                    <div class="option" id="opt-d"><span class="opt-label">D</span> <span id="out-d">Option D</span></div>
+                </div>
+                <div class="footer">
+                    <div class="social-text" id="out-footer">@username</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="editor-panel">
+        <div class="control-panel">
+            <div id="status-display" style="font-size:12px; font-weight:bold; margin-bottom:5px;">Ready</div>
+            <div class="control-row">
+                <button class="btn btn-prev" onclick="prevQuestion()"><i class="fas fa-arrow-left"></i></button>
+                <button class="btn btn-next" onclick="nextQuestion()">Next <i class="fas fa-arrow-right"></i></button>
+            </div>
+            <button class="btn btn-magic" onclick="setRandomTheme()">🎨 Magic Theme Change</button>
+            <button class="btn btn-import" onclick="toggleImport()">📂 Import JSON</button>
+            
+            <div id="import-area">
+                <textarea id="json-input" placeholder="Paste Code Here..."></textarea>
+                <button class="btn btn-next" style="margin-top:5px; background:#4caf50;" onclick="loadUserJson()">✅ Load Data</button>
+            </div>
+        </div>
+
+        <div class="row-inputs">
+            <div class="col"><label>Q.No</label><input type="text" id="inp-qno" oninput="updatePoster()"></div>
+            <div class="col"><label>Channel</label><input type="text" id="inp-channel" value="SHARDE STUDY" oninput="updatePoster()"></div>
+        </div>
+
+        <label>Question:</label>
+        <input type="text" id="q-part1" placeholder="Start..." oninput="updatePoster()">
+        <input type="text" id="q-part2" class="highlight-input" placeholder="Red Highlight" oninput="updatePoster()">
+        <input type="text" id="q-part3" placeholder="End..." oninput="updatePoster()">
+
+        <div class="row-inputs">
+            <div class="col"><input type="text" id="inp-a" placeholder="Option A" oninput="updatePoster()"></div>
+            <div class="col"><input type="text" id="inp-b" placeholder="Option B" oninput="updatePoster()"></div>
+        </div>
+        <div class="row-inputs">
+            <div class="col"><input type="text" id="inp-c" placeholder="Option C" oninput="updatePoster()"></div>
+            <div class="col"><input type="text" id="inp-d" placeholder="Option D" oninput="updatePoster()"></div>
+        </div>
+
+        <div class="row-inputs">
+            <div class="col">
+                <label>Correct:</label>
+                <select id="inp-correct" onchange="updatePoster()">
+                    <option value="">Select</option>
+                    <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+                </select>
+            </div>
+            <div class="col"><label>Footer</label><input type="text" id="inp-footer" value="@shardestudypoint" oninput="updatePoster()"></div>
+        </div>
+
+        <div class="row-inputs" style="margin-top:20px;">
+            <button class="btn" style="background:#2e7d32;" onclick="downloadImage('png')">Save PNG</button>
+            <button class="btn" style="background:#e65100;" onclick="downloadImage('jpg')">Save JPG</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. MOBILE SCALING LOGIC (The Fix) ---
+        function resizePoster() {
+            const wrapper = document.getElementById('ratioWrapper');
+            const poster = document.getElementById('poster');
+            
+            // Calculate scale: Wrapper Width / 1280 (Poster Width)
+            const scale = wrapper.clientWidth / 1280;
+            poster.style.transform = `scale(${scale})`;
+        }
+        
+        // Listen for screen changes
+        window.addEventListener('resize', resizePoster);
+        window.addEventListener('load', resizePoster);
+
+        // --- 2. THEMES ---
+        const themes = [
+            { bg: "linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d)", badge: "#b21f1f", high: "#d35400", opt: "#fdbb2d", text: "#fff" },
+            { bg: "linear-gradient(135deg, #134E5E, #71B280)", badge: "#134E5E", high: "#27ae60", opt: "#a2fca2", text: "#fff" },
+            { bg: "linear-gradient(135deg, #2b5876, #4e4376)", badge: "#4e4376", high: "#ff00cc", opt: "#ff00cc", text: "#fff" },
+            { bg: "radial-gradient(circle, #434343 0%, #000000 100%)", badge: "#000", high: "#f1c40f", opt: "#f1c40f", text: "#fff" },
+            { bg: "linear-gradient(135deg, #e52d27, #b31217)", badge: "#fff", high: "#b31217", opt: "#fff", text: "#fff" }
+        ];
+
+        function setRandomTheme() {
+            const t = themes[Math.floor(Math.random() * themes.length)];
+            const root = document.documentElement;
+            root.style.setProperty('--bg-gradient', t.bg);
+            root.style.setProperty('--badge-text', t.badge);
+            root.style.setProperty('--highlight-color', t.high);
+            root.style.setProperty('--opt-bg', t.opt);
+            root.style.setProperty('--poster-text', t.text);
+            alert("Theme Changed! 🎨");
+        }
+
+        // --- 3. QUIZ LOGIC ---
+        let questionsDB = [];
+        let currentIndex = 0;
+
+        function toggleImport() {
+            var x = document.getElementById("import-area");
+            x.style.display = (x.style.display === "none") ? "block" : "none";
+        }
+
+        function loadUserJson() {
+            try {
+                var data = JSON.parse(document.getElementById("json-input").value);
+                if(Array.isArray(data) && data.length > 0) {
+                    questionsDB = data;
+                    currentIndex = 0;
+                    loadQuestion(0);
+                    alert("✅ Loaded " + data.length + " Questions!");
+                    toggleImport();
+                } else { alert("❌ Invalid Data"); }
+            } catch(e) { alert("❌ Error in Code"); }
+        }
+
+        function loadQuestion(index) {
+            if (questionsDB.length === 0) return;
+            if (index < 0) index = 0;
+            if (index >= questionsDB.length) index = questionsDB.length - 1;
+            currentIndex = index;
+            const data = questionsDB[index];
+
+            document.getElementById('inp-qno').value = "Q." + (index + 1);
+            document.getElementById('q-part1').value = data.p1 || "";
+            document.getElementById('q-part2').value = data.p2 || "";
+            document.getElementById('q-part3').value = data.p3 || "";
+            document.getElementById('inp-a').value = data.a || "";
+            document.getElementById('inp-b').value = data.b || "";
+            document.getElementById('inp-c').value = data.c || "";
+            document.getElementById('inp-d').value = data.d || "";
+            document.getElementById('inp-correct').value = data.correct || "";
+            
+            document.getElementById('status-display').innerText = `Question ${index + 1}/${questionsDB.length}`;
+            updatePoster();
+        }
+
+        function nextQuestion() { 
+            if(currentIndex < questionsDB.length - 1) loadQuestion(currentIndex + 1); 
+            else alert("End of list!");
+        }
+        function prevQuestion() { 
+            if(currentIndex > 0) loadQuestion(currentIndex - 1); 
+        }
+
+        function updatePoster() {
+            document.getElementById('out-qno').innerText = document.getElementById('inp-qno').value;
+            document.getElementById('out-channel').innerText = document.getElementById('inp-channel').value;
+            document.getElementById('out-a').innerText = document.getElementById('inp-a').value;
+            document.getElementById('out-b').innerText = document.getElementById('inp-b').value;
+            document.getElementById('out-c').innerText = document.getElementById('inp-c').value;
+            document.getElementById('out-d').innerText = document.getElementById('inp-d').value;
+            document.getElementById('out-footer').innerText = document.getElementById('inp-footer').value;
+
+            var html = document.getElementById('q-part1').value;
+            var p2 = document.getElementById('q-part2').value;
+            var p3 = document.getElementById('q-part3').value;
+            if(p2) html += ' <span class="highlight">' + p2 + '</span>';
+            if(p3) html += ' ' + p3;
+            document.getElementById('out-question-text').innerHTML = html;
+
+            var correct = document.getElementById('inp-correct').value;
+            ['a','b','c','d'].forEach(x => document.getElementById('opt-'+x).classList.remove('correct-style'));
+            if(correct) document.getElementById('opt-'+correct.toLowerCase()).classList.add('correct-style');
+        }
+
+        function downloadImage(type) {
+            var poster = document.getElementById('poster');
+            var clone = poster.cloneNode(true);
+            // Full HD Download Logic
+            clone.style.transform = "scale(1)"; 
+            clone.style.position = "fixed"; clone.style.top = "0"; clone.style.left = "0"; clone.style.zIndex = "-999";
+            document.body.appendChild(clone);
+            
+            var filename = document.getElementById('inp-qno').value + '.' + type;
+            html2canvas(clone, { scale: 1, useCORS: true }).then(canvas => {
+                var link = document.createElement('a');
+                link.download = filename;
+                link.href = canvas.toDataURL('image/' + type);
+                link.click();
+                document.body.removeChild(clone);
+            });
+        }
+    </script>
+</body>
+</html>
